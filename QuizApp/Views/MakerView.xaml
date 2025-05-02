@@ -4,37 +4,65 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
-    <StackPanel Margin="10">
-        <TextBox Text="{Binding QuizName, UpdateSourceTrigger=PropertyChanged}" 
-              Margin="0,0,0,10" />
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*" />
+            <ColumnDefinition Width="3*" />
+        </Grid.ColumnDefinitions>
 
-        <ListBox ItemsSource="{Binding Questions}" 
-             SelectedItem="{Binding SelectedQuestion}" 
-             DisplayMemberPath="Text" 
-             Margin="0,0,0,10" />
+        <!-- Sekcja Quizu -->
+        <GroupBox Header="Nazwa quizu" Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,10">
+            <StackPanel>
+                <TextBox Text="{Binding QuizName, UpdateSourceTrigger=PropertyChanged}" 
+                         Margin="0,5,0,0" 
+                         />
+            </StackPanel>
+        </GroupBox>
 
-        <TextBox Text="{Binding QuestionText, UpdateSourceTrigger=PropertyChanged}" 
-              Margin="0,0,0,10" />
+        <!-- Lista pytań -->
+        <GroupBox Header="Lista pytań" Grid.Row="1" Grid.Column="0" Margin="0,0,10,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ListBox ItemsSource="{Binding Questions}" 
+                         SelectedItem="{Binding SelectedQuestion}" 
+                         DisplayMemberPath="Text" />
+            </ScrollViewer>
+        </GroupBox>
 
-        <ItemsControl ItemsSource="{Binding Answers}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Width="200" />
-                        <CheckBox IsChecked="{Binding IsCorrect}" Content="Poprawna" />
-                    </StackPanel>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <!-- Edytor pytania -->
+        <GroupBox Header="Edytor pytania" Grid.Row="1" Grid.Column="1">
+            <StackPanel>
+                <TextBox Text="{Binding QuestionText, UpdateSourceTrigger=PropertyChanged}" 
+                         Margin="0,5,0,10" 
+                         />
 
-        <Button Content="Dodaj pytanie" Command="{Binding NextQuestionCommand}" Margin="0,10,0,0" />
-        <Button Content="Edytuj pytanie" Command="{Binding EditQuestionCommand}" Margin="0,10,0,0" />
-        <Button Content="Anuluj" Command="{Binding CancelEditCommand}" Margin="5"/>
-        <Button Content="Usuń pytanie" Command="{Binding DeleteQuestionCommand}" Margin="0,10,0,0" />
-        <Button Content="Zakończ quiz" Command="{Binding FinishQuizCommand}" Margin="0,10,0,0" />
-        <Button Content="Wczytaj quiz" Command="{Binding LoadQuizCommand}" Margin="0,10,0,0" />
-        
-    </StackPanel>
+                <ItemsControl ItemsSource="{Binding Answers}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" 
+                                         Width="200" 
+                                         Margin="0,0,10,0"  />
+                                <CheckBox IsChecked="{Binding IsCorrect}" Content="Poprawna" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </GroupBox>
 
-
+        <!-- Przyciski akcji -->
+        <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
+            <Button Content="Dodaj pytanie" Command="{Binding NextQuestionCommand}" Margin="5" />
+            <Button Content="Edytuj pytanie" Command="{Binding EditQuestionCommand}" Margin="5" />
+            <Button Content="Anuluj" Command="{Binding CancelEditCommand}" Margin="5" />
+            <Button Content="Usuń pytanie" Command="{Binding DeleteQuestionCommand}" Margin="5" />
+            <Button Content="Zapisz quiz" Command="{Binding FinishQuizCommand}" Margin="5" />
+            <Button Content="Wczytaj quiz" Command="{Binding LoadQuizCommand}" Margin="5" />
+        </StackPanel>
+    </Grid>
 </UserControl>

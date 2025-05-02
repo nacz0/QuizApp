@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Input;
+using QuizApp.Helpers;
 using QuizApp.Services;
 using QuizApp.ViewModels.BaseClass;
 
@@ -32,6 +33,7 @@ namespace QuizApp.ViewModels
             {
                 _questionText = value;
                 OnPropertyChanged(nameof(QuestionText));
+                CommandManager.InvalidateRequerySuggested(); // Odśwież stan komend
             }
         }
 
@@ -42,19 +44,11 @@ namespace QuizApp.ViewModels
             {
                 _selectedQuestion = value;
                 OnPropertyChanged(nameof(SelectedQuestion));
-                // Aktualizuj tekst pytania i odpowiedzi w edytorze
+
                 if (_selectedQuestion != null)
                 {
                     QuestionText = _selectedQuestion.Text;
-                    Answers.Clear();
-                    foreach (var answer in _selectedQuestion.Answers)
-                    {
-                        Answers.Add(new AnswerViewModel
-                        {
-                            Text = answer.Text,
-                            IsCorrect = answer.IsCorrect
-                        });
-                    }
+                    QuestionService.UpdateAnswers(_selectedQuestion.Answers, Answers);
                 }
             }
         }
@@ -68,7 +62,6 @@ namespace QuizApp.ViewModels
         public ICommand LoadQuizCommand { get; }
         public ICommand EditQuestionCommand { get; }
         public ICommand DeleteQuestionCommand { get; }
-
         public ICommand CancelEditCommand { get; }
 
         public MakerViewModel()
@@ -89,64 +82,40 @@ namespace QuizApp.ViewModels
         {
             if (SelectedQuestion != null)
             {
-                ResetEditor(); // Resetuj edytor do domyślnego stanu
+                ClearEditor();
             }
         }
-
-
-        //private void AddAnswer()
-        //{
-        //    Answers.Add(new AnswerViewModel());
-        //}
 
         private void AddQuestion()
         {
-            // Dodaj nowe pytanie do listy
-            Questions.Add(new QuestionViewModel
+            if (!QuizValidator.ValidateQuestion(QuestionText, Answers, out var errorMessage))
             {
-                Text = QuestionText,
-                Answers = new ObservableCollection<AnswerViewModel>(Answers.Select(a => new AnswerViewModel
-                {
-                    Text = a.Text,
-                    IsCorrect = a.IsCorrect
-                }))
-            });
-
-            // Resetuj edytor
-            ResetEditor();
-        }
-
-        private void ResetEditor()
-        {
-            QuestionText = string.Empty;
-            foreach (var answer in Answers)
-            {
-                answer.Text = string.Empty;
-                answer.IsCorrect = false;
+                MessageBox.Show(errorMessage, "Błąd", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
             }
-            SelectedQuestion = null;
+
+            Questions.Add(QuestionService.CreateQuestion(QuestionText, Answers));
+            ClearEditor();
         }
 
         private void EditQuestion()
         {
             if (SelectedQuestion != null)
             {
+                if (!QuizValidator.ValidateQuestion(QuestionText, Answers, out var errorMessage))
+                {
+                    MessageBox.Show(errorMessage, "Błąd", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
                 // Aktualizuj tekst pytania
                 SelectedQuestion.Text = QuestionText;
 
                 // Aktualizuj odpowiedzi
-                SelectedQuestion.Answers.Clear();
-                foreach (var answer in Answers)
-                {
-                    SelectedQuestion.Answers.Add(new AnswerViewModel
-                    {
-                        Text = answer.Text,
-                        IsCorrect = answer.IsCorrect
-                    });
-                }
+                QuestionService.UpdateAnswers(Answers, SelectedQuestion.Answers);
 
-                // Nie resetuj edytora ani listy odpowiedzi
-                // Zachowaj aktualny stan edytora
+                // Przejdź do trybu tworzenia nowego pytania
+                ClearEditor();
             }
         }
 
@@ -155,24 +124,15 @@ namespace QuizApp.ViewModels
             if (SelectedQuestion != null)
             {
                 Questions.Remove(SelectedQuestion);
-                SelectedQuestion = null;
-
-                // Resetuj edytor
-                QuestionText = string.Empty;
-                ResetAnswers(); // Przywróć domyślne odpowiedzi
+                ClearEditor();
             }
-        }
-
-        private bool CanAddQuestion()
-        {
-            return !string.IsNullOrWhiteSpace(QuestionText) && Answers.Any() && Answers.Any(a => a.IsCorrect);
         }
 
         private void FinishQuiz()
         {
-            if (string.IsNullOrWhiteSpace(QuizName))
+            if (!QuizValidator.ValidateAllQuestions(Questions, out var errorMessage))
             {
-                MessageBox.Show("Nazwa quizu nie może być pusta.", "Błąd", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(errorMessage, "Błąd", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
@@ -192,25 +152,12 @@ namespace QuizApp.ViewModels
 
             EncryptionService.EncryptToFile(filePath, quizData.ToString(), password);
 
+            // Resetuj nazwę quizu
             QuizName = string.Empty;
+
+            // Wyczyść edytor i pytania
+            ClearEditor();
             Questions.Clear();
-            QuestionText = string.Empty;
-            ResetAnswers(); // Zamiast Answers.Clear()
-        }
-
-        private void ResetAnswers()
-        {
-            Answers.Clear();
-            for (int i = 0; i < 4; i++) // Domyślnie 4 odpowiedzi
-            {
-                Answers.Add(new AnswerViewModel());
-            }
-        }
-
-
-        private bool CanFinishQuiz()
-        {
-            return !string.IsNullOrWhiteSpace(QuizName) && Questions.Any();
         }
 
         private void LoadQuiz()
@@ -239,7 +186,7 @@ namespace QuizApp.ViewModels
 
                     QuizName = lines[0].Replace("Quiz: ", string.Empty).Trim();
                     Questions.Clear();
-                    ResetAnswers(); // Przywróć domyślne odpowiedzi
+                    ResetAnswers();
 
                     QuestionViewModel currentQuestion = null;
 
@@ -250,11 +197,7 @@ namespace QuizApp.ViewModels
                             if (currentQuestion != null)
                                 Questions.Add(currentQuestion);
 
-                            currentQuestion = new QuestionViewModel
-                            {
-                                Text = line.Replace("Pytanie: ", string.Empty).Trim(),
-                                Answers = new ObservableCollection<AnswerViewModel>()
-                            };
+                            currentQuestion = QuestionService.CreateQuestion(line.Replace("Pytanie: ", string.Empty).Trim(), new ObservableCollection<AnswerViewModel>());
                         }
                         else if (line.StartsWith("- "))
                         {
@@ -282,6 +225,35 @@ namespace QuizApp.ViewModels
             }
         }
 
+        private void ResetAnswers()
+        {
+            Answers.Clear();
+            for (int i = 0; i < 4; i++) // Domyślnie 4 odpowiedzi
+            {
+                Answers.Add(new AnswerViewModel());
+            }
+        }
+
+        private void ClearEditor()
+        {
+            QuestionText = string.Empty;
+            ResetAnswers();
+            SelectedQuestion = null;
+        }
+
+        private bool CanAddQuestion()
+        {
+            return !string.IsNullOrWhiteSpace(QuestionText)
+                   && Answers.Any()
+                   && Answers.All(a => !string.IsNullOrWhiteSpace(a.Text))
+                   && Answers.Any(a => a.IsCorrect)
+                   && SelectedQuestion == null;
+        }
+
+        private bool CanFinishQuiz()
+        {
+            return !string.IsNullOrWhiteSpace(QuizName) && Questions.Any();
+        }
     }
 
     public class QuestionViewModel
@@ -302,6 +274,7 @@ namespace QuizApp.ViewModels
             {
                 _text = value;
                 OnPropertyChanged(nameof(Text));
+                CommandManager.InvalidateRequerySuggested(); // Odśwież stan komend
             }
         }
 
