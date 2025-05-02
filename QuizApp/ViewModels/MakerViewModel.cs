@@ -256,36 +256,4 @@ namespace QuizApp.ViewModels
         }
     }
 
-    public class QuestionViewModel
-    {
-        public string Text { get; set; }
-        public ObservableCollection<AnswerViewModel> Answers { get; set; }
-    }
-
-    public class AnswerViewModel : ViewModelBase
-    {
-        private string _text = "";
-        private bool _isCorrect;
-
-        public string Text
-        {
-            get => _text;
-            set
-            {
-                _text = value;
-                OnPropertyChanged(nameof(Text));
-                CommandManager.InvalidateRequerySuggested(); // Odśwież stan komend
-            }
-        }
-
-        public bool IsCorrect
-        {
-            get => _isCorrect;
-            set
-            {
-                _isCorrect = value;
-                OnPropertyChanged(nameof(IsCorrect));
-            }
-        }
-    }
 }
