@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Windows;
 using System.Windows.Input;
 using QuizApp.Services;
 using QuizApp.ViewModels.BaseClass;
@@ -68,41 +69,72 @@ namespace QuizApp.ViewModels
         public ICommand EditQuestionCommand { get; }
         public ICommand DeleteQuestionCommand { get; }
 
+        public ICommand CancelEditCommand { get; }
+
         public MakerViewModel()
         {
             Answers = new ObservableCollection<AnswerViewModel>();
+            ResetAnswers(); // Ustaw domyślne odpowiedzi
             Questions = new ObservableCollection<QuestionViewModel>();
 
-            AddAnswerCommand = new RelayCommand(_ => AddAnswer(), _ => true);
             NextQuestionCommand = new RelayCommand(_ => AddQuestion(), _ => CanAddQuestion());
             FinishQuizCommand = new RelayCommand(_ => FinishQuiz(), _ => CanFinishQuiz());
             LoadQuizCommand = new RelayCommand(_ => LoadQuiz(), _ => true);
             EditQuestionCommand = new RelayCommand(_ => EditQuestion(), _ => SelectedQuestion != null);
             DeleteQuestionCommand = new RelayCommand(_ => DeleteQuestion(), _ => SelectedQuestion != null);
+            CancelEditCommand = new RelayCommand(_ => CancelEdit(), _ => SelectedQuestion != null);
         }
 
-        private void AddAnswer()
+        private void CancelEdit()
         {
-            Answers.Add(new AnswerViewModel());
+            if (SelectedQuestion != null)
+            {
+                ResetEditor(); // Resetuj edytor do domyślnego stanu
+            }
         }
+
+
+        //private void AddAnswer()
+        //{
+        //    Answers.Add(new AnswerViewModel());
+        //}
 
         private void AddQuestion()
         {
+            // Dodaj nowe pytanie do listy
             Questions.Add(new QuestionViewModel
             {
                 Text = QuestionText,
-                Answers = new ObservableCollection<AnswerViewModel>(Answers)
+                Answers = new ObservableCollection<AnswerViewModel>(Answers.Select(a => new AnswerViewModel
+                {
+                    Text = a.Text,
+                    IsCorrect = a.IsCorrect
+                }))
             });
 
+            // Resetuj edytor
+            ResetEditor();
+        }
+
+        private void ResetEditor()
+        {
             QuestionText = string.Empty;
-            Answers.Clear();
+            foreach (var answer in Answers)
+            {
+                answer.Text = string.Empty;
+                answer.IsCorrect = false;
+            }
+            SelectedQuestion = null;
         }
 
         private void EditQuestion()
         {
             if (SelectedQuestion != null)
             {
+                // Aktualizuj tekst pytania
                 SelectedQuestion.Text = QuestionText;
+
+                // Aktualizuj odpowiedzi
                 SelectedQuestion.Answers.Clear();
                 foreach (var answer in Answers)
                 {
@@ -113,10 +145,8 @@ namespace QuizApp.ViewModels
                     });
                 }
 
-                // Resetuj edytor
-                QuestionText = string.Empty;
-                Answers.Clear();
-                SelectedQuestion = null;
+                // Nie resetuj edytora ani listy odpowiedzi
+                // Zachowaj aktualny stan edytora
             }
         }
 
@@ -129,7 +159,7 @@ namespace QuizApp.ViewModels
 
                 // Resetuj edytor
                 QuestionText = string.Empty;
-                Answers.Clear();
+                ResetAnswers(); // Przywróć domyślne odpowiedzi
             }
         }
 
@@ -141,7 +171,10 @@ namespace QuizApp.ViewModels
         private void FinishQuiz()
         {
             if (string.IsNullOrWhiteSpace(QuizName))
-                throw new InvalidOperationException("Nazwa quizu nie może być pusta.");
+            {
+                MessageBox.Show("Nazwa quizu nie może być pusta.", "Błąd", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
 
             var quizData = new StringBuilder();
             quizData.AppendLine($"Quiz: {QuizName}");
@@ -162,8 +195,18 @@ namespace QuizApp.ViewModels
             QuizName = string.Empty;
             Questions.Clear();
             QuestionText = string.Empty;
-            Answers.Clear();
+            ResetAnswers(); // Zamiast Answers.Clear()
         }
+
+        private void ResetAnswers()
+        {
+            Answers.Clear();
+            for (int i = 0; i < 4; i++) // Domyślnie 4 odpowiedzi
+            {
+                Answers.Add(new AnswerViewModel());
+            }
+        }
+
 
         private bool CanFinishQuiz()
         {
@@ -183,54 +226,62 @@ namespace QuizApp.ViewModels
             if (openFileDialog.ShowDialog() == true)
             {
                 var filePath = openFileDialog.FileName;
-
-                if (!File.Exists(filePath))
-                    throw new FileNotFoundException("Wybrany plik nie istnieje.");
-
-                var decryptedData = EncryptionService.DecryptFromFile(filePath, password);
-
-                var lines = decryptedData.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-                if (lines.Length == 0 || !lines[0].StartsWith("Quiz: "))
-                    throw new InvalidDataException("Plik quizu ma nieprawidłowy format.");
-
-                QuizName = lines[0].Replace("Quiz: ", string.Empty).Trim();
-                Questions.Clear();
-
-                QuestionViewModel currentQuestion = null;
-
-                foreach (var line in lines.Skip(1))
+                try
                 {
-                    if (line.StartsWith("Pytanie: "))
+                    if (!File.Exists(filePath))
+                        throw new FileNotFoundException("Wybrany plik nie istnieje.");
+
+                    var decryptedData = EncryptionService.DecryptFromFile(filePath, password);
+
+                    var lines = decryptedData.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+                    if (lines.Length == 0 || !lines[0].StartsWith("Quiz: "))
+                        throw new InvalidDataException("Plik quizu ma nieprawidłowy format.");
+
+                    QuizName = lines[0].Replace("Quiz: ", string.Empty).Trim();
+                    Questions.Clear();
+                    ResetAnswers(); // Przywróć domyślne odpowiedzi
+
+                    QuestionViewModel currentQuestion = null;
+
+                    foreach (var line in lines.Skip(1))
                     {
-                        if (currentQuestion != null)
-                            Questions.Add(currentQuestion);
-
-                        currentQuestion = new QuestionViewModel
+                        if (line.StartsWith("Pytanie: "))
                         {
-                            Text = line.Replace("Pytanie: ", string.Empty).Trim(),
-                            Answers = new ObservableCollection<AnswerViewModel>()
-                        };
-                    }
-                    else if (line.StartsWith("- "))
-                    {
-                        if (currentQuestion == null)
-                            throw new InvalidDataException("Odpowiedź bez pytania w pliku quizu.");
+                            if (currentQuestion != null)
+                                Questions.Add(currentQuestion);
 
-                        var answerText = line.Substring(2, line.LastIndexOf(" (Poprawna: ") - 2).Trim();
-                        var isCorrect = line.Contains("(Poprawna: True)");
-
-                        currentQuestion.Answers.Add(new AnswerViewModel
+                            currentQuestion = new QuestionViewModel
+                            {
+                                Text = line.Replace("Pytanie: ", string.Empty).Trim(),
+                                Answers = new ObservableCollection<AnswerViewModel>()
+                            };
+                        }
+                        else if (line.StartsWith("- "))
                         {
-                            Text = answerText,
-                            IsCorrect = isCorrect
-                        });
+                            if (currentQuestion == null)
+                                throw new InvalidDataException("Odpowiedź bez pytania w pliku quizu.");
+
+                            var answerText = line.Substring(2, line.LastIndexOf(" (Poprawna: ") - 2).Trim();
+                            var isCorrect = line.Contains("(Poprawna: True)");
+
+                            currentQuestion.Answers.Add(new AnswerViewModel
+                            {
+                                Text = answerText,
+                                IsCorrect = isCorrect
+                            });
+                        }
                     }
+
+                    if (currentQuestion != null)
+                        Questions.Add(currentQuestion);
                 }
-
-                if (currentQuestion != null)
-                    Questions.Add(currentQuestion);
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Wystąpił błąd podczas ładowania quizu: {ex.Message}", "Błąd", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
         }
+
     }
 
     public class QuestionViewModel
